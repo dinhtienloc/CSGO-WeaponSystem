@@ -4,32 +4,69 @@
 #include <sourcemod>
 
 #if defined _weaponsystem_included
- #endinput
+#endinput
 #endif
 #define _weaponsystem_included
 
-#define MAX_WEAPON 46
-#define MAX_EQUIP 15
-#define MAX_TYPE 3
-#define MAX_FORWARD 5
-
 enum ForwardName {
-	WPN_BOUGHT = 0,
-	WPN_REMOVE,
-	WPN_ADDAMMO,
-	SPEC_BOUGHT,
+	WPN_BOUGHT = 0, 
+	WPN_REMOVE, 
+	WPN_ADDAMMO, 
+	SPEC_BOUGHT, 
 	SPEC_REMOVE
 }
 
 enum WeaponType {
-	WPN_PRIMARY = 0,
-	WPN_SECONDARY,
+	WPN_PRIMARY = 0, 
+	WPN_SECONDARY, 
 	WPN_MELEE
 }
 
 enum SpecType {
-	SPEC_T = 0,
+	SPEC_T = 0, 
 	SPEC_CT
+}
+
+enum CSWeaponId {
+	CSW_NONE = 0,
+	CSW_GLOCK,
+	CSW_P250,
+	CSW_FIVESEVEN,
+	CSW_DEAGLE,
+	CSW_ELITE,
+	CSW_HPK2000,
+	CSW_USP,
+	CSW_TEC9,
+	CSW_REVOLVER,
+	CSW_NOVA,
+	CSW_XM1014,
+	CSW_MAG7,
+	CSW_SAWEOFF,
+	CSW_M249,
+	CSW_NEGEV,
+	CSW_MP9,
+	CSW_MAC10,
+	CSW_MP7,
+	CSW_UMP45,
+	CSW_P90,
+	CSW_BIZON,
+	CSW_FAMAS,
+	CSW_M4A4,
+	CSW_M4A1_S,
+	CSW_GALIL,
+	CSW_AK47,
+	CSW_SSG08,
+	CSW_AUG,
+	CSW_SG556,
+	CSW_AWP,
+	CSW_SCAR20,
+	CSW_G3SG1,
+	CSW_HEGRENADE,
+	CSW_FLASHBANG,
+	CSW_SMOKEGRENADE,
+	CSW_MOLOTOV,
+	CSW_INCENDIARY,
+	CSW_DECOY
 }
 
 /**
@@ -43,7 +80,7 @@ enum SpecType {
  *
  * @return						Weapon id if or -1 if failure.
  */
-native int WS_RegisterWeapon(char[] wpnName, char[] requiredWpnName, WeaponType type, int baseOn, int cost);
+native int WS_RegisterWeapon(char[] wpnName, char[] requiredWpnName, WeaponType type, CSWeaponId baseOn, int cost);
 
 
 /**
@@ -109,4 +146,4 @@ forward Action WS_OnSpecBought(int id, int itemId);
  *
  * @return			Plugin_Handled or Plugin_Stop to block removing. Or Plugin_Continue to continue.
  */
-forward Action WS_OnSpecRemove(int id, int itemId);
+forward Action WS_OnSpecRemove(int id, int itemId); 

@@ -1,7 +1,5 @@
 #pragma semicolon 1
 
-#define DEBUG
-
 #define PLUGIN_AUTHOR "locdt"
 #define PLUGIN_VERSION "1.0"
 
@@ -12,42 +10,85 @@
 
 #pragma newdecls required
 
+#define charsmax(%1) sizeof(%1)-1
+#define TRANSLATION_FILE "weaponsystem.pharses"
 
-Handle gForwards[MAX_FORWARD];
+/**
+ * FORWARDS
+ **/
+Handle fwdWeaponBought;
+Handle fwdWeaponRemove;
+Handle fwdWeaponAddAmmo;
+Handle fwdSpecBought;
+Handle fwdSpecRemove;
 
-// Weapon Arrays
-Handle ArrWeaponName;
-Handle ArrReqWeaponName;
-Handle ArrWeaponType;
-Handle ArrWeaponBaseOn;
-Handle ArrWeaponCost;
+/**
+ * DATA ARRAYS
+ **/
+
+// Weapon arrays
+ArrayList ArrWeaponName;
+ArrayList ArrReqWeaponName;
+ArrayList ArrWeaponType;
+ArrayList ArrWeaponBaseOn;
+ArrayList ArrWeaponCost;
 
 // Special Items Arrays
-Handle ArrSpecName;
-Handle ArrSpecType;
-Handle ArrSpecCost;
+ArrayList ArrSpecName;
+ArrayList ArrReqSpecName;
+ArrayList ArrSpecType;
+ArrayList ArrSpecCost;
 
-// Initialize Variables
+/**
+ * COUNTING VARIABLES
+ **/
+
+// Total items count
 int gTotalWeaponCount;
-int gTotalSpecialItemCount;
+int gWeaponCount[view_as<int>(WeaponType)];
+
+int gTotalSpecItemCount;
+int gSpecCount[view_as<int>(SpecType)];
+
+
+/**
+ * WEAPON'S INDEX ARRAYS
+ **/
+ArrayList gWeaponArr;
+ArrayList gSpecArr;
+
+ArrayList gPriArr;
+ArrayList gSecArr;
+ArrayList gMeleeArr;
+ArrayList gSpecTArr;
+ArrayList gSpecCTArr;
+
+/**
+ * BOOLEAN VARIABLES
+ **/
+bool bHasWeapon[MAXPLAYERS+1];
+
+/**
+ * PLAYER VARIABLES
+ **/
+int gFirstWeapon[MAXPLAYERS+1][view_as<int>(WeaponType)];
+int gPreWeapon[MAXPLAYERS+1][view_as<int>(WeaponType)];
+
+/**
+ * PCVAR VARIABLES
+ **/
+Handle pCvarUnlockEnabled;
+Handle pCvarSpecItemEnabled;
+ 
 
 public Plugin myinfo = 
 {
-	name = "[CSGO] The Hidden: Weapon System",
-	author = PLUGIN_AUTHOR,
-	description = "Weapon system for the hidden mode of CSGO",
-	version = PLUGIN_VERSION,
+	name = "[CSGO] The Hidden: Weapon System", 
+	author = PLUGIN_AUTHOR, 
+	description = "Weapon system for the hidden mode of CSGO", 
+	version = PLUGIN_VERSION, 
 	url = ""
 };
-
-public void OnPluginStart()
-{
-	gForwards[WPN_BOUGHT] = CreateGlobalForward("WS_OnWeaponBought", ET_Hook, Param_Cell, Param_Cell);
-	gForwards[WPN_REMOVE] = CreateGlobalForward("WS_OnWeaponRemove", ET_Hook, Param_Cell, Param_Cell);
-	gForwards[WPN_ADDAMMO] = CreateGlobalForward("WS_OnWeaponAddAmmo", ET_Hook, Param_Cell, Param_Cell);
-	gForwards[SPEC_BOUGHT] = CreateGlobalForward("WS_OnSpecBought", ET_Hook, Param_Cell, Param_Cell);
-	gForwards[WPN_ADDAMMO] = CreateGlobalForward("WS_OnSpecRemove", ET_Hook, Param_Cell, Param_Cell);
-}
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max) {
 	CreateNative("WS_RegisterWeapon", Native_RegisterWeapon);
@@ -59,34 +100,153 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	return APLRes_Success;
 }
 
+public void OnPluginStart()
+{
+	//LoadTranslations(TRANSLATION_FILE);
+	pCvarUnlockEnabled = CreateConVar("ws_unlock_enabled", "1");
+	pCvarSpecItemEnabled = CreateConVar("ws_special_enabled", "1");
+	
+	// Just for testing
+	RegConsoleCmd("ws_weapon_count", GetTotalWeaponCount);
+	
+	fwdWeaponBought = CreateGlobalForward("WS_OnWeaponBought", ET_Hook, Param_Cell, Param_Cell);
+	fwdWeaponRemove = CreateGlobalForward("WS_OnWeaponRemove", ET_Hook, Param_Cell, Param_Cell);
+	fwdWeaponAddAmmo = CreateGlobalForward("WS_OnWeaponAddAmmo", ET_Hook, Param_Cell, Param_Cell);
+	fwdSpecBought = CreateGlobalForward("WS_OnSpecBought", ET_Hook, Param_Cell, Param_Cell);
+	fwdSpecRemove = CreateGlobalForward("WS_OnSpecRemove", ET_Hook, Param_Cell, Param_Cell);
+	
+	InitVariables();
+}
+
 public int Native_RegisterWeapon(Handle plugin, int numParams) {
-	char wpnName[] = GetNativeString(1);
-	char reqWpnName[] = GetNativeString(2);
+	char wpnName[PLATFORM_MAX_PATH];
+	char reqWpnName[PLATFORM_MAX_PATH];
+	
+	GetNativeString(1, wpnName, sizeof(wpnName));
+	GetNativeString(2, reqWpnName, sizeof(reqWpnName));
 	WeaponType type = GetNativeCell(3);
-	int basedOn = GetNativeCell(4);
+	CSWeaponId basedOn = GetNativeCell(4);
 	int cost = GetNativeCell(5);
 	
-	return -1;
+	
+	ArrWeaponName.PushString(wpnName);
+	ArrReqWeaponName.PushString(reqWpnName);
+	ArrWeaponType.Push(type);
+	ArrWeaponBaseOn.Push(basedOn);
+	ArrWeaponCost.Push(cost);
+	
+	gTotalWeaponCount++;
+	gWeaponCount[type]++;
+	
+	PrintToServer("[WeaponSystem] Registry_Success: Weapon %s", wpnName);
+	
+	return gTotalWeaponCount - 1;
 }
 
 public int Native_RegisterSpecialItem(Handle plugin, int numParams) {
-	char specName[] = GetNativeString(1);
-	char reqSpecName[] = GetNativeString(2);
+	char specName[PLATFORM_MAX_PATH];
+	char reqSpecName[PLATFORM_MAX_PATH];
+	
+	GetNativeString(1, specName, charsmax(specName));
+	GetNativeString(2, reqSpecName, charsmax(reqSpecName));
 	SpecType type = GetNativeCell(3);
 	int cost = GetNativeCell(4);
 	
-	return -1;
+	ArrSpecName.PushString(specName);
+	ArrReqSpecName.PushString(reqSpecName);
+	ArrSpecType.Push(type);
+	ArrSpecCost.Push(cost);
+	
+	gTotalSpecItemCount++;
+	gSpecCount[type]++;
+	
+	return gTotalSpecItemCount - 1;
 }
 
 public int Native_GetWeaponBasedOn(Handle plugin, int numParams) {
-	int id = GetNativeCell(1);
 	int itemId = GetNativeCell(2);
 	
-	return -1;
+	if (itemId >= gTotalWeaponCount) return 0;
+	return ArrWeaponBaseOn.Get(itemId);
 }
 
-public OnMapStart() {
+void InitVariables() {
+	int stringSize = ByteCountToCells(PLATFORM_MAX_PATH);
 	
+	// Initialize Weapon Arrays
+	ArrWeaponName = new ArrayList(stringSize);
+	ArrReqWeaponName = new ArrayList(stringSize);
+	ArrWeaponType = new ArrayList(1);
+	ArrWeaponBaseOn = new ArrayList(1);
+	ArrWeaponCost = new ArrayList(1);
+	
+	// Initialize Special Item Arrays
+	ArrSpecName = new ArrayList(stringSize);
+	ArrReqSpecName = new ArrayList(stringSize);
+	ArrSpecType = new ArrayList(1);
+	ArrSpecCost = new ArrayList(1);
+	
+	// Initialize Weapon's id Arrays
+	gWeaponArr = new ArrayList(1);
+	gSpecArr = new ArrayList(1);
+	
+	gPriArr = new ArrayList(1);
+	gSecArr = new ArrayList(1);
+	gMeleeArr = new ArrayList(1);
+	gSpecTArr = new ArrayList(1);
+	gSpecCTArr = new ArrayList(1);
+}
+
+public void OnMapStart() {
+	// Reset data
+	gWeaponCount[WPN_PRIMARY] = 0;
+	gWeaponCount[WPN_SECONDARY] = 0;
+	gWeaponCount[WPN_MELEE] = 0;
+	
+	gSpecCount[SPEC_T] = 0;
+	gSpecCount[SPEC_CT] = 0;
+	
+	// Load weapon list
+	static WeaponType wpnType;
+	static SpecType specType;
+	
+	for (int i = 0; i < gTotalWeaponCount; i++) {
+		wpnType = ArrWeaponType.Get(i);
+		switch (wpnType) {
+			case WPN_PRIMARY:
+				gPriArr.Push(i);
+			case WPN_SECONDARY:
+				gSecArr.Push(i);
+			case WPN_MELEE:
+				gMeleeArr.Push(i);
+		}
+		gWeaponCount[wpnType]++;
+	}
+	
+	for (int i = 0; i < gTotalSpecItemCount; i++) {
+		specType = ArrSpecType.Get(i);
+		switch (specType) {
+			case SPEC_T:
+				gSpecTArr.Push(i);
+			case SPEC_CT:
+				gSpecCTArr.Push(i);
+		}
+		gSpecCount[specType]++;
+	}
+}
+
+public void OnClientPutInServer(int client) {
+	ResetPlayerWeapon(client);
+}
+
+public void OnClientDisconnect(int client) {
+	ResetPlayerWeapon(client);
+}
+
+void ResetPlayerWeapon(int client) {
+	gPreWeapon[client][WPN_PRIMARY] = -1;
+	gPreWeapon[client][WPN_SECONDARY] = -1;
+	gPreWeapon[client][WPN_MELEE] = -1;
 }
 
 /**
@@ -100,16 +260,16 @@ void CallEventWeaponBought(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
-   	Call_StartForward(gForwards[WPN_BOUGHT]);
-   	
-   	/* Push parameters */
-   	Call_PushCell(id);
+	Call_StartForward(fwdWeaponBought);
+	
+	/* Push parameters */
+	Call_PushCell(id);
 	Call_PushCell(itemId);
 	
 	/* Finish the call, get the result */
-   	Call_Finish(result);
-   	
-   	return result;
+	Call_Finish(result);
+	
+	return result;
 }
 
 /**
@@ -123,16 +283,16 @@ void CallEventWeaponRemove(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
-   	Call_StartForward(gForwards[WPN_REMOVE]);
-   	
-   	/* Push parameters */
-   	Call_PushCell(id);
+	Call_StartForward(fwdWeaponRemove);
+	
+	/* Push parameters */
+	Call_PushCell(id);
 	Call_PushCell(itemId);
 	
 	/* Finish the call, get the result */
-   	Call_Finish(result);
-   	
-   	return result;
+	Call_Finish(result);
+	
+	return result;
 }
 
 /**
@@ -146,16 +306,16 @@ void CallEventWeaponAddAmmo(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
-   	Call_StartForward(gForwards[WPN_ADDAMMO]);
-   	
-   	/* Push parameters */
-   	Call_PushCell(id);
+	Call_StartForward(fwdWeaponAddAmmo);
+	
+	/* Push parameters */
+	Call_PushCell(id);
 	Call_PushCell(itemId);
 	
 	/* Finish the call, get the result */
-   	Call_Finish(result);
-   	
-   	return result;
+	Call_Finish(result);
+	
+	return result;
 }
 
 /**
@@ -169,16 +329,16 @@ void CallEventSpecialBought(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
-   	Call_StartForward(gForwards[SPEC_BOUGHT]);
-   	
-   	/* Push parameters */
-   	Call_PushCell(id);
+	Call_StartForward(fwdSpecBought);
+	
+	/* Push parameters */
+	Call_PushCell(id);
 	Call_PushCell(itemId);
 	
 	/* Finish the call, get the result */
-   	Call_Finish(result);
-   	
-   	return result;
+	Call_Finish(result);
+	
+	return result;
 }
 
 /**
@@ -192,14 +352,33 @@ void CallEventSpecialRemove(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
-   	Call_StartForward(gForwards[SPEC_REMOVE]);
-   	
-   	/* Push parameters */
-   	Call_PushCell(id);
+	Call_StartForward(fwdSpecRemove);
+	
+	/* Push parameters */
+	Call_PushCell(id);
 	Call_PushCell(itemId);
 	
 	/* Finish the call, get the result */
-   	Call_Finish(result);
-   	
-   	return result;
+	Call_Finish(result);
+	
+	return result;
+}
+
+/**
+ * TEST FUNCTION
+ **/
+public Action GetTotalWeaponCount(int client, int args) {
+	PrintToConsole(client, "Total Weapon Count: %d", gTotalWeaponCount);
+	char wpnName[PLATFORM_MAX_PATH];
+	
+	for (int i = 0; i < gTotalWeaponCount; i++) {
+		ArrWeaponName.GetString(i, wpnName, sizeof(wpnName));
+		PrintToConsole(client, "***************");
+		PrintToConsole(client, "ID: %s", i);
+		PrintToConsole(client, "Name: %s", wpnName);
+		PrintToConsole(client, "Type: %d", ArrWeaponType.Get(i));
+		PrintToConsole(client, "Based: %d", ArrWeaponBaseOn.Get(i));
+		PrintToConsole(client, "Cost: %d", ArrWeaponCost.Get(i));
+		PrintToConsole(client, "***************");
+	}
 }
