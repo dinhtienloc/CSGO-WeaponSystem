@@ -1,0 +1,39 @@
+"Phrases"
+{
+	"WM_TITLE"
+	{
+		"en"		"Weapon Menu"
+	}
+	"WM_PRIMARY"
+	{
+		"en" 		"Primary Weapon"
+	}
+	"WM_SECONDARY"
+	{
+		"en"		"Secondary Weapon"
+	}
+	"WM_MELEE"
+	{
+		"en"		"Melee Weapon"
+	}
+	"WM_TAKEWPN"
+	{
+		"en"		"Get Weapon"
+	}
+	"SM_TITLE"
+	{
+		"en"		"Special Item Menu"
+	}
+	"UNLOCK_SYSTEM_DISABLED"
+	{
+		"en"		"Unlock system is disabled."
+	}
+	"SHOP_T_DISABLED"
+	{
+		"en"		"Weapon is not available for Hidden."
+	}
+	"SHOP_DEAD_DISABLED"
+	{
+		"en"		"Weapon is not available for dead player."
+	}
+}

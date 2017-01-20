@@ -8,6 +8,8 @@
 #endif
 #define _weaponsystem_included
 
+
+
 enum ForwardName {
 	WPN_BOUGHT = 0, 
 	WPN_REMOVE, 

@@ -11,7 +11,10 @@
 #pragma newdecls required
 
 #define charsmax(%1) sizeof(%1)-1
-#define TRANSLATION_FILE "weaponsystem.pharses"
+#define TRANSLATION_FILE "weaponsystem.phrases"
+
+#define CS_TEAM_T 2
+#define CS_TEAM_CT 3
 
 /**
  * FORWARDS
@@ -102,12 +105,13 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-	//LoadTranslations(TRANSLATION_FILE);
+	LoadTranslations(TRANSLATION_FILE);
 	pCvarUnlockEnabled = CreateConVar("ws_unlock_enabled", "1");
 	pCvarSpecItemEnabled = CreateConVar("ws_special_enabled", "1");
 	
 	// Just for testing
 	RegConsoleCmd("ws_weapon_count", GetTotalWeaponCount);
+	RegConsoleCmd("ws_weapon_menu", ShowWeaponMainMenu);
 	
 	fwdWeaponBought = CreateGlobalForward("WS_OnWeaponBought", ET_Hook, Param_Cell, Param_Cell);
 	fwdWeaponRemove = CreateGlobalForward("WS_OnWeaponRemove", ET_Hook, Param_Cell, Param_Cell);
@@ -197,14 +201,24 @@ void InitVariables() {
 	gSpecCTArr = new ArrayList(1);
 }
 
-public void OnMapStart() {
-	// Reset data
+void ResetData() {
 	gWeaponCount[WPN_PRIMARY] = 0;
 	gWeaponCount[WPN_SECONDARY] = 0;
 	gWeaponCount[WPN_MELEE] = 0;
 	
 	gSpecCount[SPEC_T] = 0;
 	gSpecCount[SPEC_CT] = 0;
+	
+	gSecArr.Clear();
+	gPriArr.Clear();
+	gSecArr.Clear();
+	gMeleeArr.Clear();
+	gSpecCTArr.Clear();
+}
+
+public void OnMapStart() {
+	// Reset data
+	ResetData();
 	
 	// Load weapon list
 	static WeaponType wpnType;
@@ -213,12 +227,15 @@ public void OnMapStart() {
 	for (int i = 0; i < gTotalWeaponCount; i++) {
 		wpnType = ArrWeaponType.Get(i);
 		switch (wpnType) {
-			case WPN_PRIMARY:
+			case WPN_PRIMARY: {
 				gPriArr.Push(i);
-			case WPN_SECONDARY:
+			}
+			case WPN_SECONDARY: {
 				gSecArr.Push(i);
-			case WPN_MELEE:
+			}
+			case WPN_MELEE: {
 				gMeleeArr.Push(i);
+			}
 		}
 		gWeaponCount[wpnType]++;
 	}
@@ -226,10 +243,14 @@ public void OnMapStart() {
 	for (int i = 0; i < gTotalSpecItemCount; i++) {
 		specType = ArrSpecType.Get(i);
 		switch (specType) {
-			case SPEC_T:
+			case SPEC_T: {
 				gSpecTArr.Push(i);
-			case SPEC_CT:
+				break;
+			}
+			case SPEC_CT: {
 				gSpecCTArr.Push(i);
+				break;
+			}
 		}
 		gSpecCount[specType]++;
 	}
@@ -248,6 +269,118 @@ void ResetPlayerWeapon(int client) {
 	gPreWeapon[client][WPN_SECONDARY] = -1;
 	gPreWeapon[client][WPN_MELEE] = -1;
 }
+/**
+ * MENU FUNCTIONS
+ **/
+public Action ShowWeaponMainMenu(int client, int args) {
+	if (bHasWeapon[client]) return Plugin_Handled;
+	
+	char szBuffer[PLATFORM_MAX_PATH];
+	Menu mainMenu = new Menu(WeaponMenuHandler);
+	Format(szBuffer, sizeof(szBuffer), "%T", "WM_TITLE", LANG_SERVER);
+	mainMenu.SetTitle(szBuffer);
+	
+	if (IsPlayerAlive(client)) {
+		char szWpnType[PLATFORM_MAX_PATH];
+		
+		int clientTeam = GetClientTeam(client);
+		if (clientTeam == CS_TEAM_CT) {
+			IntToString(view_as<int>(WPN_PRIMARY), szWpnType, sizeof(szWpnType));
+			Format(szBuffer, sizeof(szBuffer), "%T", "WM_PRIMARY", LANG_SERVER);
+			mainMenu.AddItem(szWpnType, szBuffer);
+			
+			IntToString(view_as<int>(WPN_SECONDARY), szWpnType, sizeof(szWpnType));
+			Format(szBuffer, sizeof(szBuffer), "%T", "WM_SECONDARY", LANG_SERVER);
+			mainMenu.AddItem(szWpnType, szBuffer);
+		}
+		else if (clientTeam == CS_TEAM_T) {
+			// TODO: Melee menu...
+			PrintToChat(client, "%t", "SHOP_T_DISABLED");
+			return Plugin_Handled;
+		}
+		
+		mainMenu.ExitButton = true;
+		mainMenu.Display(client, MENU_TIME_FOREVER);
+	}
+	else PrintToChat(client, "%t", "SHOP_DEAD_DISABLED");
+	return Plugin_Handled;
+}
+
+public int WeaponMenuHandler(Menu menu, MenuAction action, int client, int item) {
+	if (action == MenuAction_End) {
+		if (menu != INVALID_HANDLE)
+			delete menu;
+	}
+	
+	if (action == MenuAction_Select) {
+		if (!IsPlayerAlive(client)) {
+			PrintToChat(client, "%t", "SHOP_DEAD_DISABLED");
+			delete menu;
+		}
+		
+		char szInfo[PLATFORM_MAX_PATH];
+		char szSubMenuTitle[PLATFORM_MAX_PATH];
+		GetMenuItem(menu, item, szInfo, sizeof(szInfo));
+		
+		static char szBuffer[PLATFORM_MAX_PATH];
+		static char wpnName[PLATFORM_MAX_PATH];
+		static char wpnReqName[PLATFORM_MAX_PATH];
+		static WeaponType chosenWpnType;
+		static int wpnBaseOn;
+		static int wpnCost;
+		static int playerMoney;
+		
+		playerMoney	= GetEntProp(client, Prop_Send, "m_iAccount");
+		chosenWpnType = view_as<WeaponType>(StringToInt(szInfo));
+		
+		if (chosenWpnType == WPN_PRIMARY)
+			Format(szSubMenuTitle, sizeof(szSubMenuTitle), "%T", "WM_PRIMARY", LANG_SERVER);
+		else if (chosenWpnType == WPN_SECONDARY)
+			Format(szSubMenuTitle, sizeof(szSubMenuTitle), "%T", "WM_SECONDARY", LANG_SERVER);
+		
+		Menu subWeaponMenu = new Menu(WeaponSubMenuHandler);
+		subWeaponMenu.SetTitle(szSubMenuTitle);
+		
+		static WeaponType wpnType;
+		static char	szWpnId[PLATFORM_MAX_PATH];
+		
+		for (int i = 0; i < gTotalWeaponCount; i++) {
+			wpnType = ArrWeaponType.Get(i);
+			if (wpnType != chosenWpnType) continue;
+			
+			ArrWeaponName.GetString(i, wpnName, sizeof(wpnName));
+			wpnBaseOn = ArrWeaponBaseOn.Get(i);
+			wpnCost = ArrWeaponCost.Get(i);
+			
+			Format(szBuffer, sizeof(szBuffer), "%s [$%d]", wpnName, wpnCost);
+			IntToString(i, szWpnId, sizeof(szWpnId));
+			
+			if (playerMoney >= wpnCost || wpnCost <= 0)
+				subWeaponMenu.AddItem(szWpnId, szBuffer, ITEMDRAW_DEFAULT);
+			else
+				subWeaponMenu.AddItem(szWpnId, szBuffer, ITEMDRAW_DISABLED);
+		}
+		
+		subWeaponMenu.ExitButton = true;
+		subWeaponMenu.Display(client, MENU_TIME_FOREVER);
+	}
+	
+}
+
+public int WeaponSubMenuHandler(Menu menu, MenuAction action, int client, int item) {
+	if (action == MenuAction_End) {
+		if (menu != INVALID_HANDLE)
+			delete menu;
+	}
+	
+	if (action == MenuAction_Select) {
+		if (!IsPlayerAlive(client)) {
+			PrintToChat(client, "%t", "SHOP_DEAD_DISABLED");
+			delete menu;
+		}
+		PrintToChat(client, "Tadaa!!!");
+	}
+}
 
 /**
  * Wrapped function to call WS_OnWeaponBought forward.
@@ -255,7 +388,7 @@ void ResetPlayerWeapon(int client) {
  * @param itemId	The id of chosen weapon.
  *
  * @return			Plugin_Handled or Plugin_Stop to block buying. Or Plugin_Continue to continue.
- */
+ **/
 void CallEventWeaponBought(int id, int itemId) {
 	Action result;
 	
@@ -278,7 +411,7 @@ void CallEventWeaponBought(int id, int itemId) {
  * @param itemId	The id of removed weapon.
  *
  * @return			Plugin_Handled or Plugin_Stop to block removing. Or Plugin_Continue to continue.
- */
+ **/
 void CallEventWeaponRemove(int id, int itemId) {
 	Action result;
 	
@@ -301,7 +434,7 @@ void CallEventWeaponRemove(int id, int itemId) {
  * @param itemId	The id of weapon.
  *
  * @return			Plugin_Handled or Plugin_Stop to block adding ammo. Or Plugin_Continue to continue.
- */
+ **/
 void CallEventWeaponAddAmmo(int id, int itemId) {
 	Action result;
 	
@@ -324,7 +457,7 @@ void CallEventWeaponAddAmmo(int id, int itemId) {
  * @param itemId	The id of chosen item.
  *
  * @return			Plugin_Handled or Plugin_Stop to block buying. Or Plugin_Continue to continue.
- */
+ **/
 void CallEventSpecialBought(int id, int itemId) {
 	Action result;
 	
@@ -347,7 +480,7 @@ void CallEventSpecialBought(int id, int itemId) {
  * @param itemId	The id of chosen item.
  *
  * @return			Plugin_Handled or Plugin_Stop to block removing. Or Plugin_Continue to continue.
- */
+ **/
 void CallEventSpecialRemove(int id, int itemId) {
 	Action result;
 	
@@ -371,14 +504,31 @@ public Action GetTotalWeaponCount(int client, int args) {
 	PrintToConsole(client, "Total Weapon Count: %d", gTotalWeaponCount);
 	char wpnName[PLATFORM_MAX_PATH];
 	
-	for (int i = 0; i < gTotalWeaponCount; i++) {
-		ArrWeaponName.GetString(i, wpnName, sizeof(wpnName));
+	PrintToConsole(client, "Total Weapons: gTotalWeaponCount = %d", gTotalWeaponCount);
+	
+	PrintToConsole(client, "Primary Weapons: gWeaponCount[WPN_PRIMARY] = %d", gPriArr.Length);
+	for (int i = 0; i < gPriArr.Length; i++) {
+		int wpnId = gPriArr.Get(i);
+		
+		ArrWeaponName.GetString(wpnId, wpnName, sizeof(wpnName));
 		PrintToConsole(client, "***************");
-		PrintToConsole(client, "ID: %s", i);
+		PrintToConsole(client, "ID: %d", wpnId);
 		PrintToConsole(client, "Name: %s", wpnName);
-		PrintToConsole(client, "Type: %d", ArrWeaponType.Get(i));
-		PrintToConsole(client, "Based: %d", ArrWeaponBaseOn.Get(i));
-		PrintToConsole(client, "Cost: %d", ArrWeaponCost.Get(i));
+		PrintToConsole(client, "Type: %d", ArrWeaponType.Get(wpnId));
+		PrintToConsole(client, "Based: %d", ArrWeaponBaseOn.Get(wpnId));
+		PrintToConsole(client, "Cost: %d", ArrWeaponCost.Get(wpnId));
+	}
+	
+	PrintToConsole(client, "Secondary Weapons: gWeaponCount[WPN_SECONDARY] = %d", gWeaponCount[WPN_SECONDARY]);
+	for (int i = 0; i < gSecArr.Length; i++) {
+		int wpnId = gSecArr.Get(i);
+		
+		ArrWeaponName.GetString(wpnId, wpnName, sizeof(wpnName));
 		PrintToConsole(client, "***************");
+		PrintToConsole(client, "ID: %d", wpnId);
+		PrintToConsole(client, "Name: %s", wpnName);
+		PrintToConsole(client, "Type: %d", ArrWeaponType.Get(wpnId));
+		PrintToConsole(client, "Based: %d", ArrWeaponBaseOn.Get(wpnId));
+		PrintToConsole(client, "Cost: %d", ArrWeaponCost.Get(wpnId));
 	}
 }
