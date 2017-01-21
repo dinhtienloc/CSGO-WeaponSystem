@@ -36,9 +36,10 @@ enum CSWeaponId {
 	CSW_FIVESEVEN,
 	CSW_DEAGLE,
 	CSW_ELITE,
-	CSW_HPK2000,
+	CSW_P2000,
 	CSW_USP,
 	CSW_TEC9,
+	CSW_CZ75,
 	CSW_REVOLVER,
 	CSW_NOVA,
 	CSW_XM1014,
@@ -54,7 +55,7 @@ enum CSWeaponId {
 	CSW_BIZON,
 	CSW_FAMAS,
 	CSW_M4A4,
-	CSW_M4A1_S,
+	CSW_M4A1S,
 	CSW_GALIL,
 	CSW_AK47,
 	CSW_SSG08,
@@ -62,15 +63,17 @@ enum CSWeaponId {
 	CSW_SG556,
 	CSW_AWP,
 	CSW_SCAR20,
-	CSW_G3SG1,
-	CSW_HEGRENADE,
+	CSW_G3SG1
+}
+
+enum CSGrenadeId {
+	CSW_HEGRENADE = 0,
 	CSW_FLASHBANG,
 	CSW_SMOKEGRENADE,
 	CSW_MOLOTOV,
 	CSW_INCENDIARY,
 	CSW_DECOY
 }
-
 /**
  * Register a weapon to the weapon menu.
  * @param wpnName				The name of registed weapon.
@@ -78,11 +81,12 @@ enum CSWeaponId {
  *								registed weapon.
  * @param type					Type of weapon.
  * @param baseOn				Id of the weapon that registed weapon based on.
+ * @weaponCode					Code to get weapon ingame (weapon_...)
  * @param cost					Weapon's cost.
  *
  * @return						Weapon id if or -1 if failure.
  */
-native int WS_RegisterWeapon(char[] wpnName, char[] requiredWpnName, WeaponType type, CSWeaponId baseOn, int cost);
+native int WS_RegisterWeapon(char[] wpnName, char[] requiredWpnName, WeaponType type, CSWeaponId baseOn, char[] weaponCode, int cost);
 
 
 /**
@@ -112,7 +116,7 @@ native int WS_GetWeaponBasedOn(int id, int itemId);
  *
  * @return			Plugin_Handled or Plugin_Stop to block buying. Or Plugin_Continue to continue.
  */
-forward Action WS_OnWeaponBought(int id, int itemId);
+forward Action WS_OnWeaponBought(int id, int itemId, char[] itemCode);
 
 /**
  * Called after player remove weapon in the weapon menu.

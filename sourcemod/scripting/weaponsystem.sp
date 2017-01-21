@@ -34,6 +34,7 @@ ArrayList ArrWeaponName;
 ArrayList ArrReqWeaponName;
 ArrayList ArrWeaponType;
 ArrayList ArrWeaponBaseOn;
+ArrayList ArrWeaponCode;
 ArrayList ArrWeaponCost;
 
 // Special Items Arrays
@@ -57,9 +58,6 @@ int gSpecCount[view_as<int>(SpecType)];
 /**
  * WEAPON'S INDEX ARRAYS
  **/
-ArrayList gWeaponArr;
-ArrayList gSpecArr;
-
 ArrayList gPriArr;
 ArrayList gSecArr;
 ArrayList gMeleeArr;
@@ -113,7 +111,7 @@ public void OnPluginStart()
 	RegConsoleCmd("ws_weapon_count", GetTotalWeaponCount);
 	RegConsoleCmd("ws_weapon_menu", ShowWeaponMainMenu);
 	
-	fwdWeaponBought = CreateGlobalForward("WS_OnWeaponBought", ET_Hook, Param_Cell, Param_Cell);
+	fwdWeaponBought = CreateGlobalForward("WS_OnWeaponBought", ET_Hook, Param_Cell, Param_Cell, Param_String);
 	fwdWeaponRemove = CreateGlobalForward("WS_OnWeaponRemove", ET_Hook, Param_Cell, Param_Cell);
 	fwdWeaponAddAmmo = CreateGlobalForward("WS_OnWeaponAddAmmo", ET_Hook, Param_Cell, Param_Cell);
 	fwdSpecBought = CreateGlobalForward("WS_OnSpecBought", ET_Hook, Param_Cell, Param_Cell);
@@ -125,24 +123,27 @@ public void OnPluginStart()
 public int Native_RegisterWeapon(Handle plugin, int numParams) {
 	char wpnName[PLATFORM_MAX_PATH];
 	char reqWpnName[PLATFORM_MAX_PATH];
+	char wpnCode[PLATFORM_MAX_PATH];
 	
 	GetNativeString(1, wpnName, sizeof(wpnName));
 	GetNativeString(2, reqWpnName, sizeof(reqWpnName));
 	WeaponType type = GetNativeCell(3);
 	CSWeaponId basedOn = GetNativeCell(4);
-	int cost = GetNativeCell(5);
+	GetNativeString(5, wpnCode, sizeof(wpnCode));
+	int cost = GetNativeCell(6);
 	
 	
 	ArrWeaponName.PushString(wpnName);
 	ArrReqWeaponName.PushString(reqWpnName);
 	ArrWeaponType.Push(type);
 	ArrWeaponBaseOn.Push(basedOn);
+	ArrWeaponCode.PushString(wpnCode);
 	ArrWeaponCost.Push(cost);
 	
 	gTotalWeaponCount++;
 	gWeaponCount[type]++;
 	
-	PrintToServer("[WeaponSystem] Registry_Success: Weapon %s", wpnName);
+	PrintToServer("[WeaponSystem] Registry_Success: Weapon %s | Cost: %d", wpnName, cost);
 	
 	return gTotalWeaponCount - 1;
 }
@@ -182,6 +183,7 @@ void InitVariables() {
 	ArrReqWeaponName = new ArrayList(stringSize);
 	ArrWeaponType = new ArrayList(1);
 	ArrWeaponBaseOn = new ArrayList(1);
+	ArrWeaponCode = new ArrayList(stringSize);
 	ArrWeaponCost = new ArrayList(1);
 	
 	// Initialize Special Item Arrays
@@ -191,9 +193,6 @@ void InitVariables() {
 	ArrSpecCost = new ArrayList(1);
 	
 	// Initialize Weapon's id Arrays
-	gWeaponArr = new ArrayList(1);
-	gSpecArr = new ArrayList(1);
-	
 	gPriArr = new ArrayList(1);
 	gSecArr = new ArrayList(1);
 	gMeleeArr = new ArrayList(1);
@@ -284,7 +283,7 @@ public Action ShowWeaponMainMenu(int client, int args) {
 		char szWpnType[PLATFORM_MAX_PATH];
 		
 		int clientTeam = GetClientTeam(client);
-		if (clientTeam == CS_TEAM_CT) {
+		if (clientTeam == CS_TEAM_CT || clientTeam == CS_TEAM_T) {
 			IntToString(view_as<int>(WPN_PRIMARY), szWpnType, sizeof(szWpnType));
 			Format(szBuffer, sizeof(szBuffer), "%T", "WM_PRIMARY", LANG_SERVER);
 			mainMenu.AddItem(szWpnType, szBuffer);
@@ -293,12 +292,13 @@ public Action ShowWeaponMainMenu(int client, int args) {
 			Format(szBuffer, sizeof(szBuffer), "%T", "WM_SECONDARY", LANG_SERVER);
 			mainMenu.AddItem(szWpnType, szBuffer);
 		}
+		/*
 		else if (clientTeam == CS_TEAM_T) {
 			// TODO: Melee menu...
 			PrintToChat(client, "%t", "SHOP_T_DISABLED");
 			return Plugin_Handled;
 		}
-		
+		*/
 		mainMenu.ExitButton = true;
 		mainMenu.Display(client, MENU_TIME_FOREVER);
 	}
@@ -326,7 +326,6 @@ public int WeaponMenuHandler(Menu menu, MenuAction action, int client, int item)
 		static char wpnName[PLATFORM_MAX_PATH];
 		static char wpnReqName[PLATFORM_MAX_PATH];
 		static WeaponType chosenWpnType;
-		static int wpnBaseOn;
 		static int wpnCost;
 		static int playerMoney;
 		
@@ -349,7 +348,6 @@ public int WeaponMenuHandler(Menu menu, MenuAction action, int client, int item)
 			if (wpnType != chosenWpnType) continue;
 			
 			ArrWeaponName.GetString(i, wpnName, sizeof(wpnName));
-			wpnBaseOn = ArrWeaponBaseOn.Get(i);
 			wpnCost = ArrWeaponCost.Get(i);
 			
 			Format(szBuffer, sizeof(szBuffer), "%s [$%d]", wpnName, wpnCost);
@@ -378,7 +376,15 @@ public int WeaponSubMenuHandler(Menu menu, MenuAction action, int client, int it
 			PrintToChat(client, "%t", "SHOP_DEAD_DISABLED");
 			delete menu;
 		}
-		PrintToChat(client, "Tadaa!!!");
+		
+		char szInfo[PLATFORM_MAX_PATH];
+		char szWpnCode[PLATFORM_MAX_PATH];
+		GetMenuItem(menu, item, szInfo, sizeof(szInfo));
+		
+		int wpnId = StringToInt(szInfo);
+		ArrWeaponCode.GetString(wpnId, szWpnCode, sizeof(szWpnCode));
+		
+		CallEventWeaponBought(client, wpnId, szWpnCode);
 	}
 }
 
@@ -389,7 +395,7 @@ public int WeaponSubMenuHandler(Menu menu, MenuAction action, int client, int it
  *
  * @return			Plugin_Handled or Plugin_Stop to block buying. Or Plugin_Continue to continue.
  **/
-void CallEventWeaponBought(int id, int itemId) {
+Action CallEventWeaponBought(int id, int itemId, char[] itemCode) {
 	Action result;
 	
 	/* Start function call */
@@ -398,6 +404,7 @@ void CallEventWeaponBought(int id, int itemId) {
 	/* Push parameters */
 	Call_PushCell(id);
 	Call_PushCell(itemId);
+	Call_PushString(itemCode);
 	
 	/* Finish the call, get the result */
 	Call_Finish(result);
@@ -412,7 +419,7 @@ void CallEventWeaponBought(int id, int itemId) {
  *
  * @return			Plugin_Handled or Plugin_Stop to block removing. Or Plugin_Continue to continue.
  **/
-void CallEventWeaponRemove(int id, int itemId) {
+Action CallEventWeaponRemove(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
@@ -435,7 +442,7 @@ void CallEventWeaponRemove(int id, int itemId) {
  *
  * @return			Plugin_Handled or Plugin_Stop to block adding ammo. Or Plugin_Continue to continue.
  **/
-void CallEventWeaponAddAmmo(int id, int itemId) {
+Action CallEventWeaponAddAmmo(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
@@ -458,7 +465,7 @@ void CallEventWeaponAddAmmo(int id, int itemId) {
  *
  * @return			Plugin_Handled or Plugin_Stop to block buying. Or Plugin_Continue to continue.
  **/
-void CallEventSpecialBought(int id, int itemId) {
+Action CallEventSpecialBought(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
@@ -481,7 +488,7 @@ void CallEventSpecialBought(int id, int itemId) {
  *
  * @return			Plugin_Handled or Plugin_Stop to block removing. Or Plugin_Continue to continue.
  **/
-void CallEventSpecialRemove(int id, int itemId) {
+Action CallEventSpecialRemove(int id, int itemId) {
 	Action result;
 	
 	/* Start function call */
@@ -503,6 +510,7 @@ void CallEventSpecialRemove(int id, int itemId) {
 public Action GetTotalWeaponCount(int client, int args) {
 	PrintToConsole(client, "Total Weapon Count: %d", gTotalWeaponCount);
 	char wpnName[PLATFORM_MAX_PATH];
+	char wpnCode[PLATFORM_MAX_PATH];
 	
 	PrintToConsole(client, "Total Weapons: gTotalWeaponCount = %d", gTotalWeaponCount);
 	
@@ -511,11 +519,13 @@ public Action GetTotalWeaponCount(int client, int args) {
 		int wpnId = gPriArr.Get(i);
 		
 		ArrWeaponName.GetString(wpnId, wpnName, sizeof(wpnName));
+		ArrWeaponCode.GetString(wpnId, wpnCode, sizeof(wpnCode));
 		PrintToConsole(client, "***************");
 		PrintToConsole(client, "ID: %d", wpnId);
 		PrintToConsole(client, "Name: %s", wpnName);
 		PrintToConsole(client, "Type: %d", ArrWeaponType.Get(wpnId));
 		PrintToConsole(client, "Based: %d", ArrWeaponBaseOn.Get(wpnId));
+		PrintToConsole(client, "Code: %s", wpnCode);
 		PrintToConsole(client, "Cost: %d", ArrWeaponCost.Get(wpnId));
 	}
 	
@@ -524,11 +534,13 @@ public Action GetTotalWeaponCount(int client, int args) {
 		int wpnId = gSecArr.Get(i);
 		
 		ArrWeaponName.GetString(wpnId, wpnName, sizeof(wpnName));
+		ArrWeaponCode.GetString(wpnId, wpnCode, sizeof(wpnCode));
 		PrintToConsole(client, "***************");
 		PrintToConsole(client, "ID: %d", wpnId);
 		PrintToConsole(client, "Name: %s", wpnName);
 		PrintToConsole(client, "Type: %d", ArrWeaponType.Get(wpnId));
 		PrintToConsole(client, "Based: %d", ArrWeaponBaseOn.Get(wpnId));
+		PrintToConsole(client, "Code: %s", wpnCode);
 		PrintToConsole(client, "Cost: %d", ArrWeaponCost.Get(wpnId));
 	}
 }
