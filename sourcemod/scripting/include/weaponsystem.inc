@@ -29,42 +29,42 @@ enum SpecType {
 	SPEC_CT
 }
 
-enum CSWeaponId {
-	CSW_NONE = 0,
-	CSW_GLOCK,
-	CSW_P250,
-	CSW_FIVESEVEN,
-	CSW_DEAGLE,
-	CSW_ELITE,
-	CSW_P2000,
-	CSW_USP,
-	CSW_TEC9,
-	CSW_CZ75,
-	CSW_REVOLVER,
-	CSW_NOVA,
-	CSW_XM1014,
-	CSW_MAG7,
-	CSW_SAWEOFF,
-	CSW_M249,
-	CSW_NEGEV,
-	CSW_MP9,
-	CSW_MAC10,
-	CSW_MP7,
-	CSW_UMP45,
-	CSW_P90,
-	CSW_BIZON,
-	CSW_FAMAS,
-	CSW_M4A4,
-	CSW_M4A1S,
-	CSW_GALIL,
-	CSW_AK47,
-	CSW_SSG08,
-	CSW_AUG,
-	CSW_SG556,
-	CSW_AWP,
-	CSW_SCAR20,
-	CSW_G3SG1
-}
+#define CSWEAPON 34
+
+#define CSW_NONE ""
+#define CSW_GLOCK "weapon_glock" 
+#define CSW_USP "weapon_usp_silencer" 
+#define CSW_P250 "weapon_p250" 
+#define CSW_FIVESEVEN "weapon_fiveseven" 
+#define CSW_DEAGLE "weapon_deagle" 
+#define CSW_ELITE "weapon_elite" 
+#define CSW_P2000 "weapon_hkp2000" 
+#define CSW_TEC9 "weapon_tec9" 
+#define CSW_CZ75 "weapon_cz75a" 
+#define CSW_REVOLVER "weapon_revolver" 
+#define CSW_NOVA "weapon_nova" 
+#define CSW_XM1014 "weapon_xm1014" 
+#define CSW_MAG7 "weapon_mag7" 
+#define CSW_SAWEDOFF "weapon_sawedoff" 
+#define CSW_M249 "weapon_m249" 
+#define CSW_NEGEV "weapon_negev" 
+#define CSW_MP9 "weapon_mp9" 
+#define CSW_MAC10 "weapon_mac10" 
+#define CSW_MP7 "weapon_mp7" 
+#define CSW_UMP45 "weapon_ump45" 
+#define CSW_P90 "weapon_p90" 
+#define CSW_BIZON "weapon_bizon" 
+#define CSW_FAMAS "weapon_famas" 
+#define CSW_M4A4 "weapon_m4a1" 
+#define CSW_M4A1S "weapon_m4a1_silencer" 
+#define CSW_GALIL "weapon_galilar" 
+#define CSW_AK47 "weapon_ak47" 
+#define CSW_SSG08 "weapon_ssg08" 
+#define CSW_AUG "weapon_aug" 
+#define CSW_SG556 "weapon_sg556" 
+#define CSW_AWP "weapon_awp" 
+#define CSW_SCAR20 "weapon_scar20" 
+#define CSW_G3SG1 "weapon_g3sg1"
 
 enum CSGrenadeId {
 	CSW_HEGRENADE = 0,
@@ -74,6 +74,7 @@ enum CSGrenadeId {
 	CSW_INCENDIARY,
 	CSW_DECOY
 }
+
 /**
  * Register a weapon to the weapon menu.
  * @param wpnName				The name of registed weapon.
@@ -86,7 +87,7 @@ enum CSGrenadeId {
  *
  * @return						Weapon id if or -1 if failure.
  */
-native int WS_RegisterWeapon(char[] wpnName, char[] requiredWpnName, WeaponType type, CSWeaponId baseOn, char[] weaponCode, int cost);
+native int WS_RegisterWeapon(char[] wpnName, char[] requiredWpnName, WeaponType type, char[] baseOn, int cost);
 
 
 /**
@@ -107,7 +108,7 @@ native int WS_RegisterSpecialItem(char[] specName, char[] requiredSpecName, Spec
  *
  * @return						Based weapon name.
  */
-native int WS_GetWeaponBasedOn(int id, int itemId);
+native int WS_GetWeaponClassname(int id, int itemId);
 
 /**
  * Called after player select weapon in the weapon menu.
